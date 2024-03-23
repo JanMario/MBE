@@ -10,7 +10,7 @@ from src.data_utils import DUMMY_ENTITY_ID, DUMMY_RELATION_ID
 from src.data_utils import START_RELATION_ID
 import src.utils.ops as ops
 from src.utils.ops import int_var_cuda, var_cuda
-from GCN.ARGCN_layer_attn import *
+from src.GCN.ARGCN_layer_attn import *
 from collections import defaultdict as ddict
 
 
@@ -19,6 +19,12 @@ class KnowledgeGraph(nn.Module):
     Each discrete knowledge graph is stored with an adjacency list.
     """
     def __init__(self, args):
+        """
++        Initialize the KnowledgeGraph class.
++
++        Args:
++            args (argparse.Namespace): Parsed command-line arguments.
++        """
         super(KnowledgeGraph, self).__init__()
         self.entity2id, self.id2entity = {}, {}
         self.relation2id, self.id2relation = {}, {}
@@ -88,9 +94,21 @@ class KnowledgeGraph(nn.Module):
             self.initial_encoder(self.encoder)
 
     def initial_encoder(self, encoder):
+        """
+        Initialize the encoder.
+
+        Args:
+            encoder (nn.Module): The encoder module.
+        """
         self.RDropout = nn.Dropout(self.emb_dropout_rate)
         self.EDropout = nn.Dropout(self.emb_dropout_rate)
         for parameter in encoder.parameters():
+            """
+            Initialize the parameters of the encoder.
+
+            Args:
+                parameter (torch.Tensor): The parameter tensor.
+            """
             if len(parameter.shape) == 1:
                 nn.Parameter(nn.init.xavier_uniform_(parameter.unsqueeze(0)).squeeze(0))
 
@@ -99,6 +117,15 @@ class KnowledgeGraph(nn.Module):
                 parameter = var_cuda(parameter, True)
 
     def load_graph_data(self, data_dir):
+        """
+        Load indices and graph structures from disk.
+
+        Args:
+            data_dir (str): Path to the data directory.
+
+        Returns:
+            None
+        """
         # Load indices
         self.entity2id, self.id2entity = load_index(os.path.join(data_dir, 'entity2id.txt'))
         # logging.info('Sanity check: {} entities loaded'.format(len(self.entity2id)))
@@ -153,6 +180,20 @@ class KnowledgeGraph(nn.Module):
         self.args.num_rel = self.data_box['all']['num_rel']
 
     def add_aug_links(self, paths, id2path, path2id, mode='train'):
+        """
+        Add augmented links to the training/validation/test set.
+
+        Args:
+            paths (dict): A dictionary of head relations and their candidate paths.
+            id2path (dict): A dictionary that maps path IDs to paths.
+            path2id (dict): A dictionary that maps paths to path IDs.
+            mode (str, optional): The mode of the data ('train', 'valid', or 'test').
+                Defaults to 'train'.
+
+        Returns:
+            dict: A dictionary of augmented triples. If no augmented triples are found,
+                returns None.
+        """
         if mode == 'train':
             s2r, sr2o, r2s = self.data_box[self.args.now_batch]['s2r'], self.data_box[self.args.now_batch]['sr2o'], self.data_box[self.args.now_batch]['r2s']
         elif mode == 'valid':
@@ -160,6 +201,21 @@ class KnowledgeGraph(nn.Module):
         elif mode == 'test':
             s2r, sr2o, r2s = self.data_box[self.args.now_batch]['s2r_test'], self.data_box[self.args.now_batch]['sr2o_test'], self.data_box[self.args.now_batch]['r2s_test']
         def search_object(root, path, s2r, sr2o, head_r):
+            """
+            Search for objects along a path.
+
+            Args:
+                root (int): The root node ID.
+                path (list): A list of relation IDs.
+                s2r (dict): A dictionary that maps subject IDs to a set of relation
+                    IDs.
+                sr2o (dict): A dictionary that maps (subject, relation) tuples to a
+                    set of object IDs.
+                head_r (int): The head relation ID.
+
+            Returns:
+                et: A set of object IDs.
+            """
             now = {root}
             next = set()
             for depth in range(len(path)):
@@ -193,6 +249,15 @@ class KnowledgeGraph(nn.Module):
         return triples_info
 
     def load_edge_index_type(self, base=False):
+        """
+        Load edge index and edge type from a file.
+
+        Args:
+            base (bool, optional): Whether to load the base data. Defaults to False.
+
+        Returns:
+            None
+        """
         if base:
             file_name = 'base_train.triples'
         else:
@@ -266,6 +331,14 @@ class KnowledgeGraph(nn.Module):
         return s2r_support, sr2o_support, r2s_support, s2r_test, sr2o_test, r2s_test
 
     def load_s2r_sr2o_base(self):
+        """
+        Load subject-to-relation and subject-relation-to-object mappings for the base data.
+
+        Returns:
+            s2r_test (dict): A dictionary that maps subject IDs to a set of relation IDs.
+            sr2o_test (dict): A dictionary that maps (subject, relation) tuples to a set of object IDs.
+            r2s_test (dict): A dictionary that maps relation IDs to a set of subject IDs.
+        """
         s2r_test, sr2o_test, r2s_test =  dict(), dict(), dict()
         for file_name in ['base_train.triples']:
             with open(os.path.join(self.args.data_dir, file_name)) as f:
@@ -304,6 +377,15 @@ class KnowledgeGraph(nn.Module):
         with open(adj_list_path, 'rb') as f:
             self.adj_list = pickle.load(f)
         def load_page_rank_scores(input_path):
+            """
+            Load page rank scores from a file.
+
+            Args:
+                input_path (str): The path to the file containing the page rank scores.
+
+            Returns:
+                pgrk_scores (dict): A dictionary that maps entity IDs to page rank scores.
+            """
             pgrk_scores = collections.defaultdict(float)
             with open(input_path) as f:
                 for line in f:
@@ -328,6 +410,15 @@ class KnowledgeGraph(nn.Module):
         self.page_rank_scores = page_rank_scores
 
         def get_action_space(e1):
+            """
+            Get the action space for an entity.
+
+            Args:
+                e1 (int): The ID of the entity.
+
+            Returns:
+                action_space (list): A list of (relation ID, target entity ID, confidence, path length) tuples.
+            """
             action_space = []
             if e1 in self.adj_list:
                 for r in self.adj_list[e1]:
@@ -343,12 +434,35 @@ class KnowledgeGraph(nn.Module):
             return action_space
 
         def get_unique_r_space(e1):
+            """
+            Get the unique relation space for an entity.
+
+            Args:
+                e1 (int): The ID of the entity.
+
+            Returns:
+                unique_r_space (list): A list of relation IDs.
+            """
             if e1 in self.adj_list:
                 return list(self.adj_list[e1].keys())
             else:
                 return []
 
         def vectorize_action_space(action_space_list, action_space_size):
+            """
+            Vectorize the action space.
+
+            Args:
+                action_space_list (list): A list of action spaces.
+                action_space_size (int): The size of the action space.
+
+            Returns:
+                r_space (torch.Tensor): A tensor of relation IDs.
+                e_space (torch.Tensor): A tensor of target entity IDs.
+                c_space (torch.Tensor): A tensor of confidences.
+                p_space (torch.Tensor): A tensor of path lengths.
+                action_mask (torch.Tensor): A tensor of action masks.
+            """
             bucket_size = len(action_space_list)
             r_space = torch.zeros(bucket_size, action_space_size) + self.dummy_r
             e_space = torch.zeros(bucket_size, action_space_size) + self.dummy_e
@@ -365,6 +479,17 @@ class KnowledgeGraph(nn.Module):
             return (int_var_cuda(r_space), int_var_cuda(e_space), var_cuda(c_space), int_var_cuda(p_space)), var_cuda(action_mask)
 
         def vectorize_unique_r_space(unique_r_space_list, unique_r_space_size, volatile):
+            """
+            Vectorize the unique relation space.
+
+            Args:
+                unique_r_space_list (list): A list of unique relation spaces.
+                unique_r_space_size (int): The size of the unique relation space.
+                volatile (bool): A flag indicating whether the tensor should be volatile.
+
+            Returns:
+                unique_r_space (torch.Tensor): A tensor of unique relation IDs.
+            """
             bucket_size = len(unique_r_space_list)
             unique_r_space = torch.zeros(bucket_size, unique_r_space_size) + self.dummy_r
             for i, u_r_s in enumerate(unique_r_space_list):
@@ -415,6 +540,11 @@ class KnowledgeGraph(nn.Module):
         """
         Pre-process and numericalize the knowledge graph structure.
 
+        Args:
+            aug_links (dict): A dictionary of augmented links.
+
+        Returns:
+            action_space (tuple): A tuple of tensors containing the action space.
         """
         if int(self.args.now_batch) > 0:
             data_dir = self.args.data_dir + '/add_' + self.args.now_batch+'/'
@@ -442,6 +572,16 @@ class KnowledgeGraph(nn.Module):
         page_rank_scores = self.page_rank_scores
 
         def get_action_space_aug(e1, conf):
+            """
+            Get the action space for an entity.
+
+            Args:
+                e1 (int): The ID of the entity.
+                conf (dict): A dictionary of edge confidences.
+
+            Returns:
+                action_space (list): A list of actions.
+            """
             action_space = []
             if e1 in self.adj_list:
                 for r in self.adj_list[e1]:
@@ -463,6 +603,20 @@ class KnowledgeGraph(nn.Module):
             return action_space
 
         def vectorize_action_space(action_space_list, action_space_size):
+            """
+            Vectorize the action space.
+
+            Args:
+                action_space_list (list): A list of action spaces.
+                action_space_size (int): The size of the action space.
+
+            Returns:
+                r_space (torch.Tensor): A tensor of relation IDs.
+                e_space (torch.Tensor): A tensor of target entity IDs.
+                c_space (torch.Tensor): A tensor of confidences.
+                p_space (torch.Tensor): A tensor of path lengths.
+                action_mask (torch.Tensor): A tensor of action masks.
+            """
             bucket_size = len(action_space_list)
             r_space = torch.zeros(bucket_size, action_space_size) + self.dummy_r
             e_space = torch.zeros(bucket_size, action_space_size) + self.dummy_e
@@ -499,7 +653,30 @@ class KnowledgeGraph(nn.Module):
                 action_space_buckets_discrete[key], key * self.args.bucket_interval)
 
     def load_all_answers(self, data_dir, add_reversed_edges=False):
+        """
+        Load all answers from the training and development sets.
+
+        Args:
+            data_dir (str): The directory containing the data.
+            add_reversed_edges (bool, optional): Whether to add reversed edges.
+                Defaults to False.
+
+        Returns:
+            None
+        """
         def add_subject(e1, e2, r, d):
+            """
+            Add a subject to the answer dictionary.
+
+            Args:
+                e1 (int): The ID of the subject entity.
+                e2 (int): The ID of the object entity.
+                r (int): The ID of the relation.
+                d (dict): The answer dictionary.
+
+            Returns:
+                None
+            """
             if not e2 in d:
                 d[e2] = {}
             if not r in d[e2]:
@@ -507,6 +684,18 @@ class KnowledgeGraph(nn.Module):
             d[e2][r].add(e1)
 
         def add_object(e1, e2, r, d):
+            """
+            Add an object to the answer dictionary.
+
+            Args:
+                e1 (int): The ID of the subject entity.
+                e2 (int): The ID of the object entity.
+                r (int): The ID of the relation.
+                d (dict): The answer dictionary.
+
+            Returns:
+                None
+            """
             if not e1 in d:
                 d[e1] = {}
             if not r in d[e1]:
@@ -554,6 +743,16 @@ class KnowledgeGraph(nn.Module):
 
         # change the answer set into a variable
         def answers_to_var(d_l):
+            """
+            Convert the answer dictionary to a variable.
+
+            Args:
+                d_l (dict): The answer dictionary.
+
+            Returns:
+                d_v (dict): The variable answer dictionary.
+
+            """
             d_v = collections.defaultdict(collections.defaultdict)
             for x in d_l:
                 for y in d_l[x]:
@@ -569,7 +768,30 @@ class KnowledgeGraph(nn.Module):
         self.all_object_vectors_dict['0'] = answers_to_var(all_objects)
 
     def load_all_answers_new_batch(self, data_dir, add_reversed_edges=False):
+        """
+        Load all answers from the training and development sets.
+
+        Args:
+            data_dir (str): The directory containing the data.
+            add_reversed_edges (bool, optional): Whether to add reversed edges.
+                Defaults to False.
+
+        Returns:
+            None
+        """
         def add_subject(e1, e2, r, d):
+            """
+            Add a subject to the answer dictionary.
+
+            Args:
+                e1 (int): The ID of the subject entity.
+                e2 (int): The ID of the object entity.
+                r (int): The ID of the relation.
+                d (dict): The answer dictionary.
+
+            Returns:
+                None
+            """
             if not e2 in d:
                 d[e2] = {}
             if not r in d[e2]:
@@ -577,6 +799,18 @@ class KnowledgeGraph(nn.Module):
             d[e2][r].add(e1)
 
         def add_object(e1, e2, r, d):
+            """
+            Add an object to the answer dictionary.
+
+            Args:
+                e1 (int): The ID of the subject entity.
+                e2 (int): The ID of the object entity.
+                r (int): The ID of the relation.
+                d (dict): The answer dictionary.
+
+            Returns:
+                None
+            """
             if not e1 in d:
                 d[e1] = {}
             if not r in d[e1]:
@@ -585,6 +819,16 @@ class KnowledgeGraph(nn.Module):
 
         # change the answer set into a variable
         def answers_to_var(d_l):
+            """
+            Convert the answer dictionary to a variable.
+
+            Args:
+                d_l (dict): The answer dictionary.
+
+            Returns:
+                d_v (dict): The variable answer dictionary.
+
+            """
             d_v = collections.defaultdict(collections.defaultdict)
             for x in d_l:
                 for y in d_l[x]:
@@ -662,6 +906,16 @@ class KnowledgeGraph(nn.Module):
             self.all_object_vectors_dict[batch_id] = answers_to_var(self.all_objects_dict[batch_id])
 
     def prepare_new_batch(self, batch_id):
+        """
+        Prepare the model for a new training batch.
+
+        Args:
+            batch_id (int): The ID of the batch.
+
+        Returns:
+            None
+
+        """
         self.args.now_batch = batch_id
         if self.args.argcn:
             self.update_embedding(batch_id)
@@ -682,50 +936,164 @@ class KnowledgeGraph(nn.Module):
 
 
     def get_inv_relation_id(self, r_id):
+        """
+        Get the inverse relation ID.
+
+        Args:
+            r_id (int): The relation ID.
+
+        Returns:
+            int: The inverse relation ID.
+        """
         return r_id + 1
 
     def get_all_entity_embeddings(self):
+        """
+        Get all entity embeddings.
+
+        Returns:
+            torch.Tensor: A tensor of all entity embeddings.
+        """
         if self.args.argcn:
             return self.EDropout(self.entity_embeddings)
         else:
             return self.EDropout(self.entity_embeddings.weight)
 
     def get_entity_embeddings(self, e):
+        """
+        Get the embedding vector for an entity.
+
+        Parameters
+        ----------
+        e : int
+            The ID of the entity.
+
+        Returns
+        -------
+        torch.Tensor
+            The embedding vector for the entity.
+        """
         if self.args.argcn:
             return self.EDropout(self.entity_embeddings[e])
         else:
             return self.EDropout(self.entity_embeddings.weight[e])
 
     def get_all_relation_embeddings(self):
+        """
+        Get all relation embeddings.
+
+        Returns:
+            torch.Tensor: A tensor of all relation embeddings.
+        """
         if self.args.argcn:
             return self.RDropout(self.relation_embeddings)
         else:
             return self.RDropout(self.relation_embeddings.weight)
 
     def get_relation_embeddings(self, r):
+        """
+        Get the embedding vector for a relation.
+
+        Parameters
+        ----------
+        r : int
+            The ID of the relation.
+
+        Returns
+        -------
+        torch.Tensor
+            The embedding vector for the relation.
+        """
         if self.args.argcn:
             return self.RDropout(self.relation_embeddings[r])
         else:
             return self.RDropout(self.relation_embeddings.weight[r])
 
     def id2triples(self, triple):
+        """
+        Convert a triple of entity IDs to their corresponding strings.
+
+        Parameters
+        ----------
+        triple : tuple
+            A triple of entity IDs.
+
+        Returns
+        -------
+        tuple
+            A triple of entity strings.
+        """
         e1, e2, r = triple
         return self.id2entity[e1], self.id2entity[e2], self.id2relation[r]
 
     def triple2ids(self, triple):
+        """
+        Convert a triple of entity IDs to their corresponding strings.
+
+        Parameters
+        ----------
+        triple : tuple
+            A triple of entity IDs.
+
+        Returns
+        -------
+        tuple
+            A triple of entity strings.
+        """
         e1, e2, r = triple
         return self.entity2id[e1], self.entity2id[e2], self.relation2id[r]
 
     def define_modules(self):
+        """
+        Define the neural network modules used in the model.
+
+        Returns:
+            None
+        """
         self.entity_embeddings = nn.Embedding(self.num_entities, self.entity_dim)
+        """
+        An embedding layer that maps entities to a low-dimensional space.
+        """
         self.EDropout = nn.Dropout(self.emb_dropout_rate)
+        """
+        A dropout layer that is applied to the entity embeddings.
+        """
         self.relation_embeddings = nn.Embedding(self.num_relations, self.relation_dim)
+        """
+        An embedding layer that maps relations to a low-dimensional space.
+        """
         self.RDropout = nn.Dropout(self.emb_dropout_rate)
+        """
+        A dropout layer that is applied to the relation embeddings.
+        """
 
     def update_embedding(self, batch, query=None):
+        """
+        Update the entity and relation embeddings using the provided batch.
+
+        Args:
+            batch (dict): A dictionary containing the training data.
+            query (dict, optional): A dictionary containing the query data.
+                Defaults to None.
+
+        Returns:
+            tuple: A tuple containing the updated entity and relation embeddings.
+        """
         self.entity_embeddings, self.relation_embeddings = self.encoder(batch, query)
 
     def initialize_modules(self):
+        """
+        Initialize the neural network modules used in the model.
+
+        This function initializes the entity and relation embeddings using the
+        Xavier initialization method.
+
+        Args:
+            None
+
+        Returns:
+            tuple: A tuple containing the initialized entity and relation embeddings.
+        """
         nn.init.xavier_normal_(self.entity_embeddings.weight)
         nn.init.xavier_normal_(self.relation_embeddings.weight)
 
