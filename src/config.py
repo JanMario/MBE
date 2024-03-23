@@ -7,8 +7,8 @@ def config(args):
         args.num_epochs = 100
         args.num_wait_epochs = 50
         args.num_peek_epochs = 2
-        args.batch_size = 256  # 128
-        args.train_batch_size = 256  # 128
+        args.batch_size = 128  # 128
+        args.train_batch_size = 128  # 128
         args.dev_batch_size = 4  # 2
         args.grad_norm = 0
         args.emb_dropout_rate = 0.3
@@ -27,8 +27,8 @@ def config(args):
         args.num_epochs = 50 # 20
         args.num_wait_epochs = 50 # 20
         args.num_peek_epochs = 1
-        args.batch_size = 1024
-        args.train_batch_size = 1024
+        args.batch_size = 256
+        args.train_batch_size = 256
         args.dev_batch_size = 128
         args.grad_norm = 0
         args.emb_dropout_rate = 0.5
@@ -48,8 +48,8 @@ def config(args):
         args.num_wait_epochs = 100
         args.num_peek_epochs = 1
         args.bucket_interval = 10
-        args.batch_size = 256
-        args.train_batch_size = 256
+        args.batch_size = 64
+        args.train_batch_size = 64
         args.dev_batch_size = 32
         args.grad_norm = 5
         args.emb_dropout_rate = 0.3

@@ -221,8 +221,8 @@ def set_logger():
         log_filename = "../logs/" + 'test.log'
     else:
         log_filename = "../logs/" + dataset + 'pre_progress.log'
-    logging.basicConfig(level=logging.INFO, filename=log_filename, filemode='w',
-                        format='%(asctime)-15s %(levelname)-8s %(message)s')
+    logging.basicConfig(level=logging.INFO, filename=log_filename, filemode='w',    #requires a folder "log" at the path e.g. home/ubuntu
+                        format='%(asctime)-15s %(levelname)-8s %(message)s', force=True)
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter("\x1b[38;20m" + ' %(message)s' + "\x1b[0m"))
