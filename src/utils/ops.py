@@ -91,6 +91,41 @@ def format_path(path_trace, kg):
         path_str += get_most_recent_entity(j)
     return path_str
 
+def format_path_for_interpretability(path_trace, kg, id2name=False):
+    def get_most_recent_relation(j):
+        relation_id = int(path_trace[j][0])
+        if relation_id == kg.self_edge:
+            return '<null>'
+        else:
+            return kg.id2relation[relation_id]
+
+    def get_most_recent_entity(j):
+        return kg.id2entity[int(path_trace[j][1])]
+
+    path_str = ''
+    rule = []
+    for j in range(1, len(path_trace)):
+        rel = get_most_recent_relation(j)
+        if rel == '<null>':
+            continue
+        head = get_most_recent_entity(j - 1)
+        tail = get_most_recent_entity(j)
+        if id2name:
+            head = kg.id2name[head]
+            if rel.endswith('_inv'):
+                rel ='inv_{}'.format(kg.id2name[rel[:-4]])
+            else:
+                rel = kg.id2name[rel]
+            tail = kg.id2name[tail]
+        if rel.endswith('_inv'):
+            rel ='inv_{}'.format(rel[:-4])
+        triple = f'({head}, {rel}, {tail})'
+        path_str += triple
+        if j != len(path_trace) - 1:
+            path_str += '\t'
+        rule.append(rel)
+    return path_str, tuple(rule)
+
 
 def format_rule(rule, kg):
     rule_str = ''
@@ -204,8 +239,9 @@ def unique_max(unique_x, x, values, marker_2D=None):
         unique_values_b, unique_idx_b = values_2D.max(dim=1)
         unique_values.append(unique_values_b)
         unique_indices.append(unique_idx_b)
-    unique_values = torch.cat(unique_values)
-    unique_idx = torch.cat(unique_indices)
+    with torch.no_grad():
+        unique_values = torch.cat(unique_values)
+        unique_idx = torch.cat(unique_indices)
     return unique_values, unique_idx
 
 

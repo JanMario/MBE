@@ -64,16 +64,16 @@ class RelConvLayer(torch.nn.Module):
                                     dim_size=data['num_ent'])
         elif self.args.rel_agg == 'mean':
             res_in = scatter_mean(src=self.neigh_drop(neighs_in) * edge_norm_in.view(-1, 1),
-                                 index=edge_index[0][:edge_size], dim=0, dim_size=data['num_ent'])
+                                index=edge_index[0][:edge_size], dim=0, dim_size=data['num_ent'])
             res_out = scatter_mean(src=self.neigh_drop(neighs_out) * edge_norm_out.view(-1, 1),
-                                  index=edge_index[0][edge_size:], dim=0,
-                                  dim_size=data['num_ent'])
+                                index=edge_index[0][edge_size:], dim=0,
+                                dim_size=data['num_ent'])
         elif self.args.rel_agg == 'max':
             res_in, _ = scatter_max(src=self.neigh_drop(neighs_in) * edge_norm_in.view(-1, 1),
-                                 index=edge_index[0][:edge_size], dim=0, dim_size=data['num_ent'])
+                                    index=edge_index[0][:edge_size], dim=0, dim_size=data['num_ent'])
             res_out, _ = scatter_max(src=self.neigh_drop(neighs_out) * edge_norm_out.view(-1, 1),
-                                  index=edge_index[0][edge_size:], dim=0,
-                                  dim_size=data['num_ent'])
+                                    index=edge_index[0][edge_size:], dim=0,
+                                    dim_size=data['num_ent'])
 
         res = self.tanh(self.bn(1/2*self.ent_drop(res_in) + 1/2*self.ent_drop(res_out)))
         return res, rel_embed

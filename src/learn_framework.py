@@ -178,7 +178,7 @@ class LFramework(nn.Module):
                 test_path = os.path.join(self.args.data_dir, 'add_' + batch_id + '/' + 'valid.triples')
                 test_data_ = load_triples(test_path, entity_index_path, relation_index_path,
                                           seen_entities=set())
-                dev_score, using_examples = self.forward(test_data_)
+                dev_score, using_examples, int_scores = self.forward(test_data_)
                 h_1, h_3, h_5, h_10, mrr = src.eval.hits_and_ranks(using_examples, dev_score, self.kg.all_objects,
                                                                    verbose=False)
                 metrics = mrr
@@ -205,7 +205,7 @@ class LFramework(nn.Module):
                         test_path = os.path.join(self.args.data_dir, 'add_'+batch_id+'/'+'test.triples')
                         test_data_ = load_triples(test_path, entity_index_path, relation_index_path,
                                                                  seen_entities=set())
-                        dev_score, using_examples = self.forward(test_data_)
+                        dev_score, using_examples, int_scores = self.forward(test_data_)
                         h_1, h_3, h_5, h_10, mrr = src.eval.hits_and_ranks(using_examples, dev_score, self.kg.all_objects,
                                                                   verbose=False)
                         pt.add_row([str(int(batch_id)-1), round(h_1,3), round(h_3,3), round(h_5,3), round(h_10,3), round(mrr,3)])
@@ -244,11 +244,16 @@ class LFramework(nn.Module):
             train_relation.clear()
             train_data_.clear()
 
-    def forward(self, examples, verbose=False):
+    def forward(self, examples, evaluation_log='', path_comp_log='', verbose=False):
         if self.args.attn:
             self.get_path_attn(self.path_record)
         pred_scores = []
         using_examples = []
+        int_scores = {'triple_count': len(examples), 'beam_count': 0, 'hits': 0, 'int_score': 0, 'int_count': 0}
+        # pred_e2s = []
+        # pred_e2_scores = []
+        # path_components_list = []
+        # search_traces = []
         # to save memory, group test set according to query relation
         if self.args.attn:
             test_relation = [[] for i in range(self.args.num_rel)]
@@ -272,12 +277,22 @@ class LFramework(nn.Module):
             if self.args.argcn and self.args.attn:
                 self.get_path_attn(self.path_record)
                 self.kg.update_embedding(self.args.now_batch, query=mini_batch[0][2])
-            pred_score = self.predict(mini_batch, verbose=verbose)
+            pred_score, int_score = self.predict(mini_batch, evaluation_log, path_comp_log, verbose=verbose)
             pred_scores.append(pred_score[:mini_batch_size])
+            #beam_search_output.append(beam_search[:mini_batch_size])
+            # pred_e2s.append(beam_search_output['pred_e2s'][:mini_batch_size])
+            # pred_e2_scores.append(beam_search_output['pred_e2_scores'][:mini_batch_size])
+            # path_components_list.append(beam_search_output['path_components_list'][:mini_batch_size])
+            # search_traces.append(beam_search_output['search_traces'][:mini_batch_size])
             using_examples += mini_batch[:mini_batch_size]
-        scores = torch.cat(pred_scores)
+            if self.args.evaluate_interpretability:
+                for cat in int_score.keys():
+                    int_scores[cat] += int_score[cat]
+            
+        with torch.no_grad():
+            scores = torch.cat(pred_scores)
 
-        return scores, using_examples
+        return scores, using_examples, int_scores
 
     def format_batch(self, batch_data, num_labels=-1, num_tiles=1):
         """

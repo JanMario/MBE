@@ -20,6 +20,8 @@ parser.add_argument('--model_root_dir', type=str, default=os.path.join(os.path.d
                     help='root directory where the model parameters are stored (default: None)')
 parser.add_argument('--model_dir', type=str, default=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'model'),
                     help='directory where the model parameters are stored (default: None)')
+parser.add_argument('--evaluation_dir', type=str, default=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'model', 'evaluation'),
+                    help='root directory where the model parameters are stored (default: None)')
 parser.add_argument('--gpu', dest='gpu', type=int, default=0,
                     help='gpu device (default: 0)')
 parser.add_argument('--checkpoint_path', type=str, default=None,
@@ -36,11 +38,11 @@ parser.add_argument('--history_num_layers', type=int, default=3, metavar='L',
                     help='action history encoding LSTM number of layers (default: 1)')
 parser.add_argument('--use_action_space_bucketing', type=bool, default=True,
                     help='bucket adjacency list by outgoing degree to avoid memory blow-up (default: True)')
-parser.add_argument('--bucket_interval', type=int, default=10,
+parser.add_argument('--bucket_interval', type=int, default=32,
                     help='adjacency list bucket size (default: 32)')
 
 # Optimization
-parser.add_argument('--num_epochs', type=int, default=200,
+parser.add_argument('--num_epochs', type=int, default=20,
                     help='maximum number of pass over the entire training set (default: 20)')
 parser.add_argument('--num_wait_epochs', type=int, default=5,
                     help='number of epochs to wait before stopping training if dev set performance drops')
@@ -113,6 +115,10 @@ parser.add_argument('--mask_test_false_negatives', type=bool, default=True,
                          'Use the same filter settings as other baseline methods.)')
 parser.add_argument('--save_beam_search_paths', action='store_true',
                     help='save the decoded path into a CSV file (default: False)')
+parser.add_argument('--log_path_components', action='store_true',
+                    help='stores path components in a text-file (default: False)')
+parser.add_argument('--evaluate_interpretability', action='store_true',
+                    help='stores path in format to evaluate against BIMR interpretability.txt, only works in combination if save_beam_search_paths=True (default: False)')
 
 # MBE parameters
 parser.add_argument('--batch_num', type=int, default=6,
@@ -154,8 +160,10 @@ parser.add_argument('--run_analysis', action='store_true',
                     help='If true, the model will be evaluated on both validation and testing sets (default: False)')
 
 # Knowledge Graph
-parser.add_argument('--add_reverse_relations', type=bool, default=True,
-                    help='add reverse relations to KB (default: True)')
+#parser.add_argument('--add_reverse_relations', type=bool, default=True,
+                    #help='add reverse relations to KB (default: True)')
+parser.add_argument('--add_reverse_relations', action='store_true',
+                    help='add reverse relations to KB (default: False)')
 parser.add_argument('--add_reversed_training_edges', action='store_true',
                     help='add reversed edges to extend training set (default: False)')
 parser.add_argument('--train_entire_graph', type=bool, default=False,

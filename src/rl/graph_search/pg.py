@@ -42,64 +42,65 @@ class PolicyGradient(LFramework):
         return (pred_e2 == e2).float()
 
     def update_path_record(self, path_record, label, r):
-        rule_rewards = []
-        path_record_rel = torch.cat([i[0].unsqueeze(0) for i in path_record], dim=0).t().tolist()
-        path_record_ent = torch.cat([i[1].unsqueeze(0) for i in path_record], dim=0).t().tolist()
-        path_record_conf = torch.cat([i[2].unsqueeze(0) for i in path_record], dim=0).t().tolist()
-        path_record_path = torch.cat([i[3].unsqueeze(0) for i in path_record], dim=0).t().tolist()
+        with torch.no_grad():
+            rule_rewards = []
+            path_record_rel = torch.cat([i[0].unsqueeze(0) for i in path_record], dim=0).t().tolist()
+            path_record_ent = torch.cat([i[1].unsqueeze(0) for i in path_record], dim=0).t().tolist()
+            path_record_conf = torch.cat([i[2].unsqueeze(0) for i in path_record], dim=0).t().tolist()
+            path_record_path = torch.cat([i[3].unsqueeze(0) for i in path_record], dim=0).t().tolist()
 
-        def clean(task_rel, rels, ents, paths):
-            res = rels[1:]  # rels[0] is the query relation
-            skip = 0
-            # delete loop relations (e.g., r1 -> -r1)
-            for i, start in enumerate(ents):
-                if skip>0:
-                    skip -= 1
-                    continue
-                cut_l, cut_r = i, i
-                for j, e in enumerate(ents[i+1:]):
-                    if e == start:
-                        cut_r = j+i+1
-                if cut_l != cut_r:
-                    skip = cut_r - cut_l
-                    for x in range(cut_l, cut_r):
-                        res[x] = 0
-            # delete invalid relations
-            path_res = []
-            for r in res:
-                if r>2:  # r=2 is the self-loop relation
-                    path_res.append(r)
-            if len(path_res) == 1 and path_res[0] == task_rel:
-                for idx, r in enumerate(res):
-                    if r > 2:
-                        if paths[idx+1]==0:
-                            break
-                        return tuple(self.id2path[paths[idx+1]])
-            return tuple(path_res)
-        r = r.tolist()
-        for rel, path_rels, path_ents, confs, paths, succ in zip(r, path_record_rel, path_record_ent, path_record_conf, path_record_path, label):
-            # get path
-            p = clean(rel, path_rels, path_ents, paths)
-            # process path
-            if succ:
-                if p not in self.path_record[rel]:
-                    self.path_record[rel][p] = {'pos': 0, 'neg': 0, 'conf': 0}
-                    self.path_record_attn[rel][p] = {'pos':0, 'neg':0, 'conf': 0}
-                self.path_record[rel][p]['pos'] += 1
-                self.path_record_attn[rel][p]['pos'] += 1
-            else:
-                if p not in self.path_record[rel]:
-                    rule_rewards.append(0)
-                    continue
-                self.path_record[rel][p]['neg'] += 1
-                self.path_record_attn[rel][p]['neg'] += 1
-            # update path info
-            self.path_record[rel][p]['conf'] = self.path_record[rel][p]['pos'] / (
-                    self.path_record[rel][p]['pos'] + self.path_record[rel][p]['neg'])
-            self.path_record_attn[rel][p]['conf'] = self.path_record_attn[rel][p]['pos'] / (
-                    self.path_record_attn[rel][p]['pos'] + self.path_record_attn[rel][p]['neg'])
-            rule_rewards.append(0)
-        return rule_rewards
+            def clean(task_rel, rels, ents, paths):
+                res = rels[1:]  # rels[0] is the query relation
+                skip = 0
+                # delete loop relations (e.g., r1 -> -r1)
+                for i, start in enumerate(ents):
+                    if skip>0:
+                        skip -= 1
+                        continue
+                    cut_l, cut_r = i, i
+                    for j, e in enumerate(ents[i+1:]):
+                        if e == start:
+                            cut_r = j+i+1
+                    if cut_l != cut_r:
+                        skip = cut_r - cut_l
+                        for x in range(cut_l, cut_r):
+                            res[x] = 0
+                # delete invalid relations
+                path_res = []
+                for r in res:
+                    if r>2:  # r=2 is the self-loop relation
+                        path_res.append(r)
+                if len(path_res) == 1 and path_res[0] == task_rel:
+                    for idx, r in enumerate(res):
+                        if r > 2:
+                            if paths[idx+1]==0:
+                                break
+                            return tuple(self.id2path[paths[idx+1]])
+                return tuple(path_res)
+            r = r.tolist()
+            for rel, path_rels, path_ents, confs, paths, succ in zip(r, path_record_rel, path_record_ent, path_record_conf, path_record_path, label):
+                # get path
+                p = clean(rel, path_rels, path_ents, paths)
+                # process path
+                if succ:
+                    if p not in self.path_record[rel]:
+                        self.path_record[rel][p] = {'pos': 0, 'neg': 0, 'conf': 0}
+                        self.path_record_attn[rel][p] = {'pos':0, 'neg':0, 'conf': 0}
+                    self.path_record[rel][p]['pos'] += 1
+                    self.path_record_attn[rel][p]['pos'] += 1
+                else:
+                    if p not in self.path_record[rel]:
+                        rule_rewards.append(0)
+                        continue
+                    self.path_record[rel][p]['neg'] += 1
+                    self.path_record_attn[rel][p]['neg'] += 1
+                # update path info
+                self.path_record[rel][p]['conf'] = self.path_record[rel][p]['pos'] / (
+                        self.path_record[rel][p]['pos'] + self.path_record[rel][p]['neg'])
+                self.path_record_attn[rel][p]['conf'] = self.path_record_attn[rel][p]['pos'] / (
+                        self.path_record_attn[rel][p]['pos'] + self.path_record_attn[rel][p]['neg'])
+                rule_rewards.append(0)
+            return rule_rewards
 
 
     def get_candidate_paths(self):
@@ -304,7 +305,8 @@ class PolicyGradient(LFramework):
             action_prob = sample_outcome['action_prob']
             log_action_probs.append(ops.safe_log(action_prob))
             action_entropy.append(policy_entropy)
-            seen_nodes = torch.cat([seen_nodes, e.unsqueeze(1)], dim=1)
+            with torch.no_grad():
+                seen_nodes = torch.cat([seen_nodes, e.unsqueeze(1)], dim=1)
             path_trace.append(action)
 
             if visualize_action_probs:
@@ -396,18 +398,37 @@ class PolicyGradient(LFramework):
 
         return sample_outcome
 
-    def predict(self, mini_batch, verbose=False):
+    def predict(self, mini_batch, evaluation_log, path_comp_log='', verbose=False):
         kg, pn = self.kg, self.mdl
         e1, e2, r = self.format_batch(mini_batch)
         beam_search_output = search.beam_search(
-            pn, e1, r, e2, kg, self.num_rollout_steps, self.beam_size)
+            pn, e1, r, e2, kg, self.num_rollout_steps, self.beam_size, return_path_components=verbose)
         pred_e2s = beam_search_output['pred_e2s']
         pred_e2_scores = beam_search_output['pred_e2_scores']
+        int_scores = {'beam_count': 0, 'hits': 0, 'int_score': 0, 'int_count': 0}
         if verbose:
-            # print inference paths
+            # save inference paths
             search_traces = beam_search_output['search_traces']
             output_beam_size = min(self.beam_size, pred_e2_scores.shape[1])
             for i in range(len(e1)):
+                test_h = kg.id2entity[mini_batch[i][0]]
+                test_r = kg.id2relation[mini_batch[i][2]]
+                test_t = kg.id2entity[mini_batch[i][1]]
+                if self.args.evaluate_interpretability and self.args.dataset == 'BIMR':
+                    test_h = kg.id2name[test_h]
+                    test_r = kg.id2name[test_r]
+                    test_t = kg.id2name[test_t]
+                if self.args.evaluate_interpretability:
+                    if test_r.endswith('_inv'):
+                        test_tr = '{}, inv_{}, {}'.format(test_h, test_r, test_t)
+                    else:
+                        test_tr = '({}, {}, {})'.format(test_h, test_r, test_t)                   
+                else:
+                    if test_r.endswith('_inv'):
+                        test_tr = '{} <-{}- {}'.format(test_h, test_r, test_t)
+                    else:
+                        test_tr = '{} -{}-> {}'.format(test_h, test_r, test_t)
+                    
                 for j in range(output_beam_size):
                     ind = i * output_beam_size + j
                     if pred_e2s[i][j] == kg.dummy_e:
@@ -415,10 +436,38 @@ class PolicyGradient(LFramework):
                     search_trace = []
                     for k in range(len(search_traces)):
                         search_trace.append((int(search_traces[k][0][ind]), int(search_traces[k][1][ind])))
-                    logging.info('beam {}: score = {} \n<PATH> {}'.format(
-                        j, float(pred_e2_scores[i][j]), ops.format_path(search_trace, kg)))
+                    if self.args.evaluate_interpretability:
+                        if self.args.dataset == 'BIMR':
+                            id2name = True
+                        else:
+                            id2name = False
+                        path, rule = ops.format_path_for_interpretability(search_trace, kg, id2name)
+                        hit = 1 if path.endswith(str(test_t) + ')') else 0
+                        interpretability_score = ''
+                        if hit == 1:
+                            int_scores['hits'] += 1
+                            if test_r in kg.interpretability_scores:
+                                if rule in kg.interpretability_scores[test_r]:
+                                    interpretability_score = kg.interpretability_scores[test_r][rule]
+                                    int_scores['int_score'] += interpretability_score
+                                    int_scores['int_count'] += 1
+                            with open(evaluation_log, mode='a') as file:
+                                file.write('{};{};{};{};{};{};{}\n'.format(
+                                    test_tr, rule, hit, interpretability_score, j + 1, float(pred_e2_scores[i][j]), path))
+                            int_scores['beam_count'] += (j + 1)
+                    else:
+                        path = ops.format_path(search_trace, kg)
+                        hit = 1 if path.endswith(str(test_t)) else 0
+                        with open(evaluation_log, mode='a') as file:
+                            file.write('{};{};{};{};{}\n'.format(
+                                test_tr, hit, j, float(pred_e2_scores[i][j]), path))
+                    #logging.info('beam {}: score = {} \n<PATH> {}'.format(
+                    #    j, float(pred_e2_scores[i][j]), ops.format_path(search_trace, kg)))
+            if len(path_comp_log) > 0:
+                with open(path_comp_log, mode='a') as file:
+                        file.write('{}\n'.format(beam_search_output['path_components_list']))
         with torch.no_grad():
             pred_scores = zeros_var_cuda([len(e1), kg.num_entities])
             for i in range(len(e1)):
                 pred_scores[i][pred_e2s[i]] = torch.exp(pred_e2_scores[i])
-        return pred_scores
+        return pred_scores, int_scores

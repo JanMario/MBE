@@ -75,6 +75,30 @@ def load_index(input_path):
             rev_index[i] = v
     return index, rev_index
 
+def load_dict(input_path):
+    d = {}
+    with open(input_path) as f:
+        for line in f.readlines():
+            k, v = line.strip().split()
+            d[k] = v
+    return d
+
+def load_dict_interpretability(input_path):
+    d = {}
+    with open(input_path) as f:
+        for line in f:
+            l = line.split('\t')
+            if l[0] != '\n' and not l[1].startswith('('):
+                score = l[0]
+                path = [l[i].strip('\n, ') for i in range(2, len(l))]
+                if l[1] in d:
+                    d[l[1]][tuple(path)] = float(score)
+                else:
+                    d[l[1]] = {tuple(path) : float(score)}    
+                    
+            else:
+                continue
+    return d
 
 def prepare_kb_envrioment(batch_num, raw_kb_path, train_path, test_path, support_path, add_reverse_relations=True):
     """
@@ -199,4 +223,3 @@ def prepare_kb_envrioment(batch_num, raw_kb_path, train_path, test_path, support
             adj_list_path = os.path.join(data_dir_, 'adj_list.pkl')
             with open(adj_list_path, 'wb') as o_f:
                 pickle.dump(dict(adj_list), o_f)
-

@@ -296,3 +296,8 @@ def export_error_cases(examples, scores, all_answers, output_path):
     logging.info('{}/{} top-1 error cases written to {}'.format(len(top_1_errors), len(examples), output_path))
     logging.info('{}/{} top-10 error cases written to {}'.format(len(top_10_errors), len(examples), output_path))
 
+def interpratibliy_metrics(int_scores):
+    path_recal = int_scores['hits'] / int_scores['triple_count']
+    local_int = int_scores['int_score'] / int_scores['int_count']
+    global_int = path_recal * local_int
+    return path_recal, local_int, global_int

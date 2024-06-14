@@ -4,7 +4,7 @@ import pickle
 import logging
 import copy
 import torch.nn as nn
-from src.data_utils import load_index
+from src.data_utils import load_index, load_dict, load_dict_interpretability
 from src.data_utils import NO_OP_ENTITY_ID, NO_OP_RELATION_ID
 from src.data_utils import DUMMY_ENTITY_ID, DUMMY_RELATION_ID
 from src.data_utils import START_RELATION_ID
@@ -28,6 +28,9 @@ class KnowledgeGraph(nn.Module):
         super(KnowledgeGraph, self).__init__()
         self.entity2id, self.id2entity = {}, {}
         self.relation2id, self.id2relation = {}, {}
+        if args.evaluate_interpretability:
+            self.id2name = {}
+            self.interpretability_scores = {}
 
         self.adj_list = None
         self.bandwidth = args.bandwidth
@@ -131,6 +134,9 @@ class KnowledgeGraph(nn.Module):
         # logging.info('Sanity check: {} entities loaded'.format(len(self.entity2id)))
         self.relation2id, self.id2relation = load_index(os.path.join(data_dir, 'relation2id.txt'))
         # logging.info('Sanity check: {} relations loaded'.format(len(self.relation2id)))
+        if self.args.evaluate_interpretability:
+            self.id2name = load_dict(os.path.join(data_dir, 'id2name.txt'))
+            self.interpretability_scores = load_dict_interpretability(os.path.join(data_dir, 'interpretability.txt'))
        
         # Load graph structures
         if self.args.model.startswith('point'):

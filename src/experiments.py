@@ -3,6 +3,8 @@ import itertools
 import numpy as np
 import os, sys
 import random
+import json
+import csv
 curPath = os.path.abspath(os.path.dirname(__file__))
 rootPath = os.path.split(curPath)[0]
 sys.path.append(rootPath)
@@ -21,6 +23,7 @@ from src.utils.ops import flatten
 from src.config import config
 import logging
 import time
+import datetime
 
 
 def process_data():
@@ -57,6 +60,14 @@ def inference(lf):
         'dev': {},
         'test': {}
     }
+    
+    evaluation_log = '' 
+    path_comp_log = '' 
+    verbose = False
+    
+    if args.save_beam_search_paths:
+        if not os.path.exists(args.evaluation_dir):
+            os.makedirs(args.evaluation_dir)
     # if args.vs100:
     #     corrupts_path = [os.path.join(args.data_dir, 'add_' + str(i + 1) + '/corrupt.txt') for i in
     #                      range(1, args.batch_num)]
@@ -65,6 +76,9 @@ def inference(lf):
 
     tb_1, tb_2 = pt.PrettyTable(), pt.PrettyTable()
     tb_1.field_names = ['GroupID', 'Hits@1', 'Hits@3', 'Hits@5', 'Hits@10', 'MRR']
+    if args.evaluate_interpretability:
+        tb_2.field_names = ['GroupID', 'PR', 'LI', 'GI']
+
     for i in range(1, args.batch_num):
         print('Testing Add Group:', i)
         batch_id = str(i+1)
@@ -81,7 +95,21 @@ def inference(lf):
                                                               mode='test')
             if lf.kg.aug_link_info is not None:
                 lf.kg.vectorize_action_space_aug_link(lf.kg.aug_link_info)
-        test_scores, test_data__ = lf.forward(test_data_, verbose=False)
+        
+        if args.save_beam_search_paths:
+            verbose = True
+            evaluation_log = f'{args.evaluation_dir}/{datetime.datetime.now():%Y%m%d_%H-%M}_add_{batch_id}.log'
+            if args.evaluate_interpretability:
+                with open(evaluation_log, mode='w') as file:
+                            file.write('test_triple;rule;hit;interpretability_score;beam;score;path\n')
+            else:
+                with open(evaluation_log, mode='w') as file:
+                            file.write('test_triple;hit;beam;score;path\n')
+        if args.log_path_components:
+            verbose = True
+            path_comp_log = f'{args.evaluation_dir}/{datetime.datetime.now():%Y%m%d_%H-%M}_add_{batch_id}_path_components.log'
+        
+        test_scores, test_data__, int_scores = lf.forward(test_data_, evaluation_log, path_comp_log, verbose=verbose)
         # if args.vs100:
         #     hits_1_, hits_3_, hits_5_, hits_10_, mrr_ = src.eval.hits_and_ranks_vs100(test_data__, test_scores,
         #                                                                                lf.kg.all_objects,
@@ -90,8 +118,14 @@ def inference(lf):
         # else:
         hits_1_, hits_3_, hits_5_, hits_10_, mrr_ = src.eval.hits_and_ranks(test_data__, test_scores,
                                                                                 lf.kg.all_objects, verbose=True)
+
         tb_1.add_row([i, round(hits_1_, 3), round(hits_3_, 3), round(hits_5_, 3), round(hits_10_, 3),
                       round(mrr_, 3)])
+        if args.evaluate_interpretability:
+            path_recal, local_int, global_int = src.eval.interpratibliy_metrics(int_scores)
+            tb_2.add_row([i, round(path_recal, 3), round(local_int, 3), round(global_int, 3)])
+            logging.info(tb_2)
+            
     logging.info(tb_1)
 
     return eval_metrics
@@ -203,14 +237,36 @@ def initialize_model_directory(args):
     )
 
     model_dir = os.path.join(model_root_dir, model_sub_dir)
+    evaluation_dir = os.path.join(model_dir, 'evaluation')
 
-    if not os.path.exists(model_dir):
+    if not os.path.exists(model_dir) and not os.path.exists(evaluation_dir):
+        os.makedirs(model_dir)
+        os.makedirs(evaluation_dir)
+        print('Model directories created: {}, {}'.format(model_dir, evaluation_dir))
+    elif not os.path.exists(model_dir):
         os.makedirs(model_dir)
         print('Model directory created: {}'.format(model_dir))
+    elif not os.path.exists(evaluation_dir):
+        os.makedirs(evaluation_dir)
+        print('Model directory created: {}'.format(evaluation_dir))
     else:
-        print('Model directory exists: {}'.format(model_dir))
+        print('Model directories exist: {}, {}'.format(model_dir, evaluation_dir))
+    
+    
+    #if not os.path.exists(model_dir):
+    #    os.makedirs(model_dir)
+    #    print('Model directory created: {}'.format(model_dir))
+    #else:
+    #    print('Model directory exists: {}'.format(model_dir))
 
+    #if not os.path.exists(evaluation_dir):
+    #    os.makedirs(evaluation_dir)
+    #    print('Model directory created: {}'.format(evaluation_dir))
+    #else:
+    #    print('Model directory exists: {}'.format(evaluation_dir))
+        
     args.model_dir = model_dir
+    args.evaluation_dir = evaluation_dir
 
 
 def set_logger():
@@ -243,6 +299,8 @@ def construct_model(args):
 if __name__ == '__main__':
     args.data_dir = args.data_dir + args.dataset
     torch.cuda.set_device(args.gpu)
+    # might improve memory allocation for torch computation
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
     # setting
     config(args)

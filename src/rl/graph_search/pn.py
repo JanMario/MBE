@@ -329,7 +329,11 @@ class GraphSearchPolicy(nn.Module):
         r, e, c, p = action
         relation_embedding = kg.get_relation_embeddings(r) * c.unsqueeze(-1)
         entity_embedding = kg.get_entity_embeddings(e)  # * c.unsqueeze(-1)
-        action_embedding = torch.cat([relation_embedding, entity_embedding], dim=-1)
+        if self.args.inference:
+            with torch.no_grad():
+                action_embedding = torch.cat([relation_embedding, entity_embedding], dim=-1)
+        else:
+            action_embedding = torch.cat([relation_embedding, entity_embedding], dim=-1)
         return action_embedding
 
     def get_soft_action_embedding(self, action, kg):
